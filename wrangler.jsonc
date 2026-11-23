@@ -8,7 +8,18 @@
     {
       "binding": "DB",
       "database_name": "nook-site-submissions",
-      "migrations_dir": "drizzle"
+      "migrations_dir": "drizzle",
+      "database_id": "a6e63024-6035-4960-86b5-028fdf48a825"
+    }
+  ],
+  "routes": [
+    {
+      "pattern": "nookinfra.com/*",
+      "zone_name": "nookinfra.com"
+    },
+    {
+      "pattern": "www.nookinfra.com/*",
+      "zone_name": "nookinfra.com"
     }
   ]
 }
