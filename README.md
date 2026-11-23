@@ -27,7 +27,15 @@ Preview runs at http://127.0.0.1:5173 with a separate local SQLite database. Loc
 
 Build output is `dist/server/index.js`. The build embeds page content and assets into one Worker. The D1 binding is `DB`; apply the committed migrations when deploying. Never initialize database tables from request handlers.
 
-Set the production `ADMIN_EMAIL` environment variable to the Nook administrator's ChatGPT account email to enable `/admin`. Team access requires platform-injected authenticated identity and checks the configured email server-side. Never run the standalone preview as a public server: it does not provide the platform authentication boundary.
+On Sites hosting, set `AUTH_MODE=sites` and `ADMIN_EMAIL` to the Nook administrator's ChatGPT account email to enable `/admin`. This requires Sites dispatch to validate and inject identity. Never set `AUTH_MODE=sites` on a standalone Worker or run the local preview as a public server. On standalone Cloudflare hosting the `/admin` route is locked, and authorized account members can review submissions in the D1 dashboard.
+
+## Deploy from GitHub to Cloudflare
+
+Connect `HarshDuke/Nook`, branch `main`, as a Workers project named `nookinfra`. Use `npm run build` as the build command and `npm run deploy` as the deploy command. The deployment account must be able to manage Workers and D1. Use the free plan unless an upgrade is explicitly approved.
+
+The deployment script finds or creates `nook-site-submissions`, resolves its real database ID, applies committed migrations, and deploys the Worker. The resolved ID is written only into the build workspace; no credentials are written to source. Public site and intake form work without visitor accounts. Email notifications are not configured.
+
+The registrar can remain GoDaddy. Cloudflare Worker custom domains require an active Cloudflare DNS zone; copy existing DNS records before changing nameservers at GoDaddy, then attach `nookinfra.com` and `www.nookinfra.com` to the Worker. Preserve existing email records.
 
 The intake endpoint validates required fields, lengths, choices and consent. It accepts only same-origin JSON requests, rate limits, uses parameterized SQL, and supports retries with a stable submission reference. Submissions are saved; email notifications are not configured.
 

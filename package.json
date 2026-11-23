@@ -10,6 +10,7 @@
   "scripts": {
     "build": "node scripts/build.mjs",
     "dev": "node scripts/preview.mjs",
+    "deploy": "node scripts/deploy-cloudflare.mjs",
     "test": "node --test tests/*.test.mjs"
   }
 }

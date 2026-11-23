@@ -62,7 +62,8 @@ async function submitSite(request,env){
  }catch{return json({error:'We could not save your site right now. Please try again; your reference will stay the same.'},503);}
 }
 async function admin(request,env){
- // Dispatch injects authenticated identity. Never trust identity supplied by form input.
+ // Trust these headers only behind Sites dispatch, never on a standalone Worker.
+ if(env.AUTH_MODE!=='sites')return html(header('')+'<main id="main" class="privacy-content wrap"><h1>Team access only</h1><p>Submissions are available to the Nook team through the hosting dashboard.</p><a class="button dark" href="/">Back to Nook</a></main>'+footer(),'Team access | Nook',false,403);
  const email=request.headers.get('oai-authenticated-user-email');
  if(!email)return Response.redirect(new URL('/signin-with-chatgpt?return_to=%2Fadmin',request.url),302);
  if(!env.ADMIN_EMAIL || email.toLowerCase()!==env.ADMIN_EMAIL.toLowerCase())return html(header('')+'<main id="main" class="privacy-content wrap"><h1>Team access only</h1><p>This page is restricted to the configured Nook administrator.</p><a class="button dark" href="/">Back to Nook</a></main>'+footer(),'Team access | Nook',false,403);
