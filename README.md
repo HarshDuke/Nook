@@ -34,6 +34,19 @@ The local server binds to loopback and enables capacity access only for that loc
 
 Private API routes: `GET/POST /api/capacity/companies`, `GET /api/capacity/companies/:id`, `POST .../:id/sites`, `POST .../:id/datasets`, `GET /api/capacity/datasets/:id`, `GET /api/capacity/runs?companyId=...&offset=...`, `POST /api/capacity/companies/:id/runs`, `GET /api/capacity/runs/:id`. Run exports include IDs, model version, data fingerprint, input assumptions and saved results for a future AI integration. No endpoint can overwrite a saved run.
 
+### Sky Harbour worked example
+
+```
+npm run seed:skyharbour
+npm run dev
+```
+
+Open `/capacity` and choose **Sky Harbour**. The seed command adds the labeled Stewart sample site, three synthetic full-year datasets and three saved runs through the same private application API. It is idempotent: rerunning it does not duplicate unchanged runs. No AI connection, hosted credentials or network data download is required.
+
+`npm run analyze:skyharbour` independently regenerates raw 15-minute CSVs, component/temperature CSVs, project JSON, summary/economic-sensitivity CSVs and a self-contained interactive HTML report in `outputs/skyharbour/`. Small reference results and the generator are committed under `examples/skyharbour/`; generated bulk data stays out of Git.
+
+The example uses the user-assumed 10 MW connection and 6 MW peak, not verified Sky Harbour capacity. Latest public reporting lists Stewart in development. The three research-informed shapes test electrified climate control, non-electric heating and prolonged winter demand; they are unweighted sensitivities, not probability forecasts. See [the research](examples/skyharbour/research.md) and [the reference results](examples/skyharbour/results.md). Every generated interval and saved sample is explicitly marked synthetic.
+
 ## Local development
 
 Requires Node.js 22.13 or newer.
