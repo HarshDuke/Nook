@@ -20,6 +20,11 @@
     {
       "pattern": "www.nookinfra.com/*",
       "zone_name": "nookinfra.com"
+    },
+    {
+      "pattern": "app.nookinfra.com",
+      "custom_domain": true
     }
-  ]
+  ],
+  "keep_vars": true
 }

@@ -1,5 +1,8 @@
 import {readFile,mkdir,writeFile,cp} from 'node:fs/promises';
 const assets={};for(const [key,file] of Object.entries({css:'styles.css',js:'form.js',home:'landing.html',form:'form.html',privacy:'privacy.html'}))assets[key]=await readFile(new URL('../src/'+file,import.meta.url),'utf8');
+assets.portal=await readFile(new URL('../src/portal/page.html',import.meta.url),'utf8');
+assets.portalJS=await readFile(new URL('../src/portal/app.js',import.meta.url),'utf8');
+assets.portalPhoto=(await readFile(new URL('../src/portal/hero.jpg',import.meta.url))).toString('base64');
 const model=(await readFile(new URL('../src/capacity/model.mjs',import.meta.url),'utf8')).replace(/^export /gm,'');
 const capacityAPI=(await readFile(new URL('../src/capacity/api.mjs',import.meta.url),'utf8')).replace(/^import .*;\n/gm,'').replace(/^export /gm,'');
 assets.lab=await readFile(new URL('../src/capacity/index.html',import.meta.url),'utf8');
