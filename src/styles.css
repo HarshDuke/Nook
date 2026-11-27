@@ -18,3 +18,37 @@
 .portal-hero a:focus-visible{outline:3px solid white;outline-offset:4px}
 
 .portal-hero { background-size: cover; background-position: center; }
+
+.orchard-home {
+  min-height: 100vh;
+  min-height: 100svh;
+  display: flex;
+  align-items: flex-end;
+  box-sizing: border-box;
+  padding: max(24px, 6vh) 5vw;
+  color: #fffdf3;
+  background: linear-gradient(to top, #091809b8, transparent 27%),
+    url('/nook-studies/orchard/orchard.jpg') 54% center / cover;
+}
+.orchard-signature h1 {
+  margin: 0;
+  color: inherit;
+  font: bold 34px/.95 Georgia, serif;
+  letter-spacing: -.075em;
+}
+.orchard-signature h1 span {
+  display: inline-block;
+  width: .12em;
+  height: .12em;
+  margin-left: .07em;
+  vertical-align: .22em;
+  background: #c7e699;
+}
+.orchard-signature a {
+  display: inline-block;
+  color: inherit;
+  font: 14px/44px system-ui, sans-serif;
+  text-decoration: underline;
+  text-underline-offset: 4px;
+}
+.orchard-signature a:focus-visible { outline: 3px solid #bff77d; }
