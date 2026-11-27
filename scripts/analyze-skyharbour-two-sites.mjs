@@ -1,0 +1,30 @@
+import {mkdir,writeFile,readFile} from 'node:fs/promises';
+import {resolve} from 'node:path';
+import {generateSite,SITES,SHARED,VERSION} from '../examples/skyharbour-two-sites/generate.mjs';
+import {PARAMETERS} from '../examples/skyharbour/generate.mjs';
+import {analyze} from '../src/capacity/model.mjs';
+const out=resolve(process.argv[2]||'outputs/skyharbour-two-sites');await mkdir(out,{recursive:true});
+const results=[];
+const csv=rows=>rows.map(row=>row.map(v=>typeof v==='number'?String(Math.round(v*1e6)/1e6):'"'+String(v??'').replaceAll('"','""')+'"').join(',')).join('\n')+'\n';
+for(const id of Object.keys(SITES)){
+ const g=generateSite(id),report=analyze(g.data,PARAMETERS,{includeTraces:false});
+ const keys=Object.keys(g.rows[0].components);
+ await writeFile(resolve(out,id+'-15min.csv'),csv([['timestamp','load_kw'],...g.data.dates.map((d,i)=>[d,g.data.load[i]])]));
+ await writeFile(resolve(out,id+'-hourly-8760.csv'),csv([['timestamp','load_kw'],...Array.from({length:8760},(_,h)=>[g.data.dates[h*4],g.data.load.slice(h*4,h*4+4).reduce((x,y)=>x+y,0)/4])]));
+ await writeFile(resolve(out,id+'-audit.csv'),csv([['timestamp','local_hour','synthetic_temperature_f','assumed_dewpoint_f','door_events','unscaled_load_kw','imposed_peak_load_kw','unscaled_heating_thermal_kw_NOT_electric',...keys.map(k=>'unscaled_'+k+'_kw')],...g.rows.map((row,i)=>[row.timestamp,row.localHour,row.temperatureF,row.dewpointF,row.doorEvents,g.rawLoad[i],g.data.load[i],row.heatingThermalKW,...keys.map(k=>row.components[k])])]));
+ await writeFile(resolve(out,id+'-events.json'),JSON.stringify(g.events));
+ const metadata={siteName:`${g.site.code} — SYNTHETIC researched working case`,address:g.site.address,city:g.site.city,state:g.site.state,description:`${VERSION}: researched public-campus geometry, assumed equipment/schedules, synthetic weather and load, imposed 10 MW connection and 6 MW peak. ${g.site.heatEvidence}`,utility:id==='bna'?'Nashville Electric Service identified in 2022 construction report; current service account/limit unverified':'Current service utility/account/limit unverified',fiber:'Not sure',internet:'Unverified',zoning:'Airport land; host and airport permissions unverified',generation:'No onsite PV or host battery included; charging-ready is not installed charging load.',evidence:'Synthetic · research-informed'};
+ await writeFile(resolve(out,id+'-project.json'),JSON.stringify({schema:'nook-capacity-lab/1.2',batteryBasis:'it_load',metadata,parameters:PARAMETERS,data:g.data}));
+ const entry={id,site:g.site,generatorVersion:VERSION,normalizationFactor:g.normalizationFactor,stats:g.stats,scenarios:report.scenarios.map(s=>({name:s.name,itMW:s.it/1000,strictITMW:s.firmIT/1000,batteryMW:s.power/1000,batteryMWh:s.energy/1000,failedDays:s.dispatch.badDays,shortfallHours:s.dispatch.shortfallHours,unmetMWh:s.dispatch.unmetEnergy/1000}))};
+ results.push(entry);
+}
+const summary={generatedAsOf:'2026-11-27',synthetic:true,generatorVersion:VERSION,sharedAssumptions:SHARED,capacityParameters:PARAMETERS,sites:results};
+const f=(x,n=3)=>x.toFixed(n);
+const resultText=['# Computed synthetic working cases','','All readings are synthetic. The 10 MW connection and 6 MW peak are imposed assumptions, not verified capacities. Weather is generated from climate normals. The raw area/equipment illustrations are uncalibrated.','','| Site | Raw peak MW | Multiplier to 6 MW | Raw MWh/year | Normalized MWh/year | Mean normalized MW |','|---|---:|---:|---:|---:|---:|',...results.map(g=>`| ${g.site.code} | ${f(g.stats.rawPeakKW/1000)} | ${f(g.normalizationFactor,2)} | ${f(g.stats.rawAnnualMWh,0)} | ${f(g.stats.annualMWh,0)} | ${f(g.stats.meanMW)} |`),'','The large normalization multipliers change implied equipment scale; these are conditional load shapes, not predictions of actual campus demand.','','| Site | Scenario | IT MW at 99% fully served UTC days | Strict IT MW, same battery | Battery MW / nameplate MWh | Failed days / shortfall hours |','|---|---|---:|---:|---:|---:|',...results.flatMap(g=>g.scenarios.map(s=>`| ${g.site.code} | ${s.name} | ${f(s.itMW)} | ${f(s.strictITMW)} | ${f(s.batteryMW)} / ${f(s.batteryMWh)} | ${s.failedDays} / ${f(s.shortfallHours,2)} |`)),'','99% of fully served UTC days permits three failed days. It is not guaranteed uptime. No-battery 100% service is 3.04 MW IT at both sites. All storage is four-hour nameplate, 10/25/50% of resulting IT power; usable energy is reduced for SOC/degradation and efficiency. PUE=1.25, residual-headroom reserve=5%.','','Exact settings, components and method are in research-and-method.md and results.json. Use 15-minute data for sizing; hourly files are energy-conserving averages.',''].join('\n');
+await writeFile(resolve(out,'computed-results.md'),resultText);
+await writeFile(new URL('../examples/skyharbour-two-sites/results.md',import.meta.url),resultText);
+await writeFile(resolve(out,'results.json'),JSON.stringify(summary,null,2));
+await writeFile(new URL('../examples/skyharbour-two-sites/results.json',import.meta.url),JSON.stringify(summary,null,2));
+await writeFile(resolve(out,'scenario-comparison.csv'),csv([['site','scenario','it_mw_99pct_UTC_days','it_mw_100pct_same_battery','battery_mw','battery_nameplate_mwh','failed_UTC_days','shortfall_hours','unmet_mwh'],...results.flatMap(g=>g.scenarios.map(s=>[g.id,s.name,s.itMW,s.strictITMW,s.batteryMW,s.batteryMWh,s.failedDays,s.shortfallHours,s.unmetMWh]))]));
+await writeFile(resolve(out,'research-and-method.md'),await readFile(new URL('../examples/skyharbour-two-sites/research.md',import.meta.url),'utf8'));
+console.log(JSON.stringify(results.map(g=>({site:g.id,...g.stats,normalizationFactor:g.normalizationFactor,scenarios:g.scenarios})),null,2));

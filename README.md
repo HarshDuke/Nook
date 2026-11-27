@@ -36,6 +36,12 @@ Private API routes: `GET/POST /api/capacity/companies`, `GET /api/capacity/compa
 
 ### Sky Harbour worked example
 
+The selected researched working cases are now **Sugar Land (SGR)** and **Nashville (BNA)**, one host-load profile per site. Run `npm run analyze:skyharbour-two-sites` to regenerate 15-minute and hourly CSVs, complete component/weather audit CSVs, event logs, importable projects and capacity comparisons. Run `npm run seed:skyharbour-two-sites` to save both sites, datasets and runs under Sky Harbour in the local company workspace. The commands use no AI or network dependency.
+
+See [the complete research and numerical assumption ledger](examples/skyharbour-two-sites/research.md), [the reproducible generator](examples/skyharbour-two-sites/generate.mjs) and [computed results](examples/skyharbour-two-sites/results.json). Nashville gas heating is documented for the newer hangars; Sugar Land heat pumps are an explicit unverified assumption. Weather is generated from NOAA temperature normals, not observed hourly data. The raw area/equipment illustrations require substantial scaling to match the user's imposed 6 MW peak; raw peaks, scaling factors and implied W/sf are preserved so that this does not become a false site forecast.
+
+The earlier Stewart sensitivities below remain historical examples, separate from the selected working cases.
+
 ```
 npm run seed:skyharbour
 npm run dev

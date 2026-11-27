@@ -13,7 +13,9 @@
     "deploy": "node scripts/deploy-cloudflare.mjs",
     "test": "node scripts/test.mjs",
     "seed:skyharbour": "node scripts/seed-skyharbour.mjs",
-    "analyze:skyharbour": "node scripts/analyze-skyharbour.mjs"
+    "analyze:skyharbour": "node scripts/analyze-skyharbour.mjs",
+    "analyze:skyharbour-two-sites": "node scripts/analyze-skyharbour-two-sites.mjs",
+    "seed:skyharbour-two-sites": "node scripts/seed-skyharbour-two-sites.mjs"
   }
 }
 
