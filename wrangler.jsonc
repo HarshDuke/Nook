@@ -2,7 +2,7 @@
   "$schema": "node_modules/wrangler/config-schema.json",
   "name": "nookinfra",
   "main": "dist/server/index.js",
-  "compatibility_date": "2026-11-22",
+  "compatibility_date": "2026-11-23",
   "workers_dev": true,
   "d1_databases": [
     {
@@ -30,5 +30,11 @@
   "vars": {
     "PORTAL_ORIGIN": "https://app.nookinfra.com",
     "CONVEX_SITE_URL": "https://zany-finch-153.convex.site"
+  },
+  "observability": {
+    "enabled": true,
+    "logs": {
+      "enabled": true
+    }
   }
 }
