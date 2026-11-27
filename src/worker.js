@@ -1,3 +1,4 @@
+import {capacityAPI} from './capacity/api.mjs';
 // Templates are embedded by scripts/build.mjs. No build-time or runtime packages.
 const securityHeaders = {
  'X-Content-Type-Options':'nosniff', 'Referrer-Policy':'strict-origin-when-cross-origin',
@@ -74,17 +75,22 @@ async function admin(request,env){
 }
 export default {async fetch(request,env={}){
  const url=new URL(request.url);const path=url.pathname.replace(/\/$/,'')||'/';
+ if(path.startsWith('/api/capacity/'))return capacityAPI(request,env);
  if(path==='/api/submissions'){if(request.method!=='POST')return json({error:'Method not allowed'},405,{Allow:'POST'});return submitSite(request,env);}
  if(!['GET','HEAD'].includes(request.method))return json({error:'Method not allowed'},405,{Allow:'GET, HEAD'});
  let response;
- if(path==='/styles.css')response=new Response(ASSETS.css,{headers:{...securityHeaders,'Content-Type':'text/css; charset=utf-8','Cache-Control':'public, max-age=300'}});
+ if(path==='/capacity')response=new Response(ASSETS.lab,{headers:{...securityHeaders,'Content-Type':'text/html; charset=utf-8','Cache-Control':'no-store','X-Robots-Tag':'noindex'}});
+ else if(path==='/capacity.js')response=new Response(ASSETS.labJS,{headers:{...securityHeaders,'Content-Type':'application/javascript; charset=utf-8','Cache-Control':'no-store'}});
+ else if(path==='/capacity.css')response=new Response(ASSETS.labCSS,{headers:{...securityHeaders,'Content-Type':'text/css; charset=utf-8','Cache-Control':'no-store'}});
+ else if(path==='/styles.css')response=new Response(ASSETS.css,{headers:{...securityHeaders,'Content-Type':'text/css; charset=utf-8','Cache-Control':'public, max-age=300'}});
  else if(path==='/form.js')response=new Response(ASSETS.js,{headers:{...securityHeaders,'Content-Type':'application/javascript; charset=utf-8','Cache-Control':'public, max-age=300'}});
  else if(path==='/favicon.svg')response=new Response('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><rect width="64" height="64" rx="12" fill="#102d25"/><path d="M17 47V20h9v4c7-9 22-7 22 6v17h-9V31c0-8-13-7-13 1v15Z" fill="#d5f49b"/></svg>',{headers:{...securityHeaders,'Content-Type':'image/svg+xml'}});
  else if(path==='/')response=html(page(ASSETS.home,'home'));
  else if(path==='/submit-site')response=html(page(ASSETS.form,'submit'),'Submit a site | Nook',true);
  else if(path==='/privacy')response=html(page(ASSETS.privacy,''),'Privacy | Nook');
  else if(path==='/admin')response=await admin(request,env);
- else if(path==='/robots.txt')response=new Response('User-agent: *\nDisallow: /admin\nDisallow: /api/\n',{headers:{'Content-Type':'text/plain'}});
+ else if(path==='/robots.txt')response=new Response('User-agent: *\nDisallow: /admin\nDisallow: /capacity\nDisallow: /api/\n',{headers:{'Content-Type':'text/plain'}});
  else response=html(header('')+'<main class="privacy-content wrap" id="main"><h1>A little off the grid.</h1><p>We could not find that page.</p><a class="button dark" href="/">Back to Nook</a></main>'+footer(),'Page not found | Nook',false,404);
  if(request.method==='HEAD')return new Response(null,{status:response.status,headers:response.headers});return response;
 }};
+

@@ -9,8 +9,9 @@
   },
   "scripts": {
     "build": "node scripts/build.mjs",
-    "dev": "node scripts/preview.mjs",
+    "dev": "node scripts/dev.mjs",
     "deploy": "node scripts/deploy-cloudflare.mjs",
-    "test": "node --test tests/*.test.mjs"
+    "test": "node scripts/test.mjs"
   }
 }
+
