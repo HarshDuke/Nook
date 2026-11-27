@@ -47,9 +47,11 @@ export const google = mutation({
   handler: async ({ db }, a) => {
     const email = emailKey(a.email),
       prior = await context(db, a.prior);
-    if (prior && prior.person.email !== email)
+    const alias = await by(db, "aliases", "email", email);
+    let p = alias ? await db.get(alias.person) : await by(db, "people", "email", email);
+    if (prior && prior.person._id !== p?._id)
       throw Error("Use the invited Google account.");
-    let p = await by(db, "people", "email", email);
+
     if (!p) {
       const admin = email === emailKey(process.env.NOOK_ADMIN_EMAIL);
       const id = await db.insert("people", {
@@ -66,10 +68,11 @@ export const google = mutation({
     } else {
       if (
         ["declined", "revoked"].includes(p.status) ||
-        (p.subject && p.subject !== a.subject)
+        ((alias || p).subject && (alias || p).subject !== a.subject)
       )
         throw Error("Access unavailable");
-      await db.patch(p._id, { subject: a.subject, name: a.name });
+      if (alias) await db.patch(alias._id, {subject: a.subject});
+      else await db.patch(p._id, { subject: a.subject, name: a.name });
     }
     if (prior) await db.delete(prior.session._id);
     await issue(db, p, a.fresh, true);
@@ -163,6 +166,7 @@ export const portal = mutation({
     if (a.op === "dashboard")
       return {
         people: await db.query("people").order("desc").take(250),
+        aliases: await db.query("aliases").take(2000),
         activity: await db.query("activity").order("desc").take(150),
         reports: await db.query("reports").take(150),
         submissions: await db.query("submissions").order("desc").take(150),
@@ -177,6 +181,29 @@ export const portal = mutation({
     const email = emailKey(clean(i.email, 254));
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) throw Error("Invalid email");
     let target = await by(db, "people", "email", email);
+    if (await by(db,"aliases","email",email)) throw Error("Use the primary account address");
+    if (["addAlias","removeAlias","issueCode"].includes(a.op)) {
+      if (!target || target.status !== "approved") throw Error("Approved account required");
+      if (target.role === "admin" && target._id !== p._id) throw Error("Administrator protected");
+      if (a.op === "issueCode") {
+        await db.insert("invites",{person:target._id,digest:i.codeDigest,epoch:target.epoch,expires:Date.now()+7*DAY,used:false});
+        await log(db,p._id,"Issued invitation code",email);
+        return true;
+      }
+      const address = emailKey(clean(i.address,254));
+      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(address)) throw Error("Invalid email");
+      const existing = await by(db,"aliases","email",address);
+      if (a.op === "addAlias") {
+        if (existing || await by(db,"people","email",address)) throw Error("Address already assigned");
+        await db.insert("aliases",{person:target._id,email:address});
+      } else {
+        if (!existing || existing.person !== target._id) throw Error("Unknown address");
+        await db.delete(existing._id);
+        await db.patch(target._id,{epoch:target.epoch+1});
+      }
+      await log(db,p._id,a.op,email+" · "+address);
+      return true;
+    }
     if (target?.role === "admin") throw Error("Administrator protected");
     const company = clean(i.company || "", 100) || undefined;
     if (!["invite", "approve", "decline", "revoke"].includes(a.op))

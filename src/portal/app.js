@@ -278,6 +278,20 @@ async function admin(p) {
         ].join(" · "),
       ),
     );
+    if (person.status === "approved") {
+      const settings = el("details"); settings.append(el("summary","Sign-in addresses and invitation code")); row.append(settings);
+      for (const alias of (d.aliases || []).filter(a=>a.person===person._id)) {
+        settings.append(el("p",alias.email),button("Remove "+alias.email,async()=>{
+          await api("removeAlias",{email:person.email,address:alias.email}); await refresh();
+        }));
+      }
+      form(settings,[["address","Additional Google email",true]],"Add address",async ({address})=>{
+        await api("addAlias",{email:person.email,address}); await refresh();
+      });
+      settings.append(button("Create single-use code",async()=>{
+        const {code}=await api("issueCode",{email:person.email}); settings.append(el("output",code+" · expires in 7 days"));
+      }));
+    }
     if (person.description) row.append(el("p", person.description));
     if (person.role !== "admin") {
       const select = el("select");

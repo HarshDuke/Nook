@@ -17,6 +17,7 @@ export default defineSchema({
     lastActive: v.optional(num),
     epoch: num,
   }).index("email", ["email"]),
+  aliases: defineTable({email: str, person: v.id("people"), subject: maybe}).index("email", ["email"]).index("person", ["person"]),
   invites: defineTable({
     digest: str,
     person: v.id("people"),

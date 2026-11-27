@@ -24,6 +24,12 @@ test("invite, identity link, company access, approval, audit and revocation", as
     company: "Sky Harbour",
     codeDigest: "invitation",
   });
+  await op("admin","addAlias",{email:"pilot@example.org",address:"personal@example.org"});
+  await expect(op("admin","invite",{email:"personal@example.org",codeDigest:"duplicate"})).rejects.toThrow();
+  await expect(op("admin","addAlias",{email:"pilot@example.org",address:"owner@example.org"})).rejects.toThrow();
+  await op("admin","issueCode",{email:"owner@example.org",codeDigest:"founder-code"});
+  await call("redeem",{code:"founder-code",fresh:"founder-stage"});
+  await expect(op("founder-stage","dashboard")).rejects.toThrow();
   await call("redeem", { code: "invitation", fresh: "temporary" });
   await expect(
     call("redeem", { code: "invitation", fresh: "again" }),
@@ -32,7 +38,9 @@ test("invite, identity link, company access, approval, audit and revocation", as
   await expect(
     google("imposter@example.org", "wrong", "temporary"),
   ).rejects.toThrow();
-  await google("pilot@example.org", "pilot", "temporary");
+  await google("personal@example.org", "pilot", "temporary");
+  expect((await op("pilot","me")).company).toBe("Sky Harbour");
+  expect((await op("admin","dashboard")).people.filter(p=>p.email==="personal@example.org")).toHaveLength(0);
   await db.mutation(makeFunctionReference("seed:skyHarbour"), {});
   expect(await op("pilot", "sites")).toEqual([]);
   const report = (await op("admin", "dashboard")).reports[0];

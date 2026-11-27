@@ -137,7 +137,7 @@ const handler = httpActionGeneric(async (ctx, req) => {
       result.headers.append("Set-Cookie", cookie("session", token, 1800));
       return result;
     }
-    const code = op === "invite" ? random() : null;
+    const code = ["invite","issueCode"].includes(op) ? random() : null;
     if (code) input.codeDigest = await hash(code);
     const data = await ctx.runMutation(ref("portal"), {
       op,
