@@ -6,6 +6,12 @@ import {
 const router = httpRouter();
 const ref = (name) => makeFunctionReference("store:" + name);
 const random = () => crypto.randomUUID().replaceAll("-", "");
+const alphabet = "0123456789abcdefghjkmnpqrstvwxyz";
+const shortCode = () =>
+  Array.from(
+    crypto.getRandomValues(new Uint8Array(12)),
+    (b) => alphabet[b & 31],
+  ).join("");
 const hash = async (str) =>
   Array.from(
     new Uint8Array(
@@ -127,17 +133,28 @@ const handler = httpActionGeneric(async (ctx, req) => {
     const input = JSON.parse(body);
     if (op === "code") {
       const token = random();
-      await ctx.runMutation(ref("redeem"), {
-        code: await hash(
-          String(input.code).replace(/[\s-]/g, "").toLowerCase(),
-        ),
-        fresh: await hash(token),
-      });
+      const value = String(input.code).replace(/[\s-]/g, "").toLowerCase();
+      const args = { code: await hash(value), fresh: await hash(token) };
+      const legacy = /^[0-9a-f]{32}$/.test(value);
+      if (legacy) await ctx.runMutation(ref("redeem"), args);
+      else if (
+        value.length !== 12 ||
+        !(await ctx.runMutation(ref("loginCode"), args))
+      )
+        return response(
+          { error: "Code unavailable. Check the code or try again later." },
+          403,
+        );
       const result = response({ ok: true });
-      result.headers.append("Set-Cookie", cookie("session", token, 1800));
+      result.headers.append(
+        "Set-Cookie",
+        cookie("session", token, legacy ? 1800 : 604800),
+      );
       return result;
     }
-    const code = ["invite","issueCode"].includes(op) ? random() : null;
+    const code = ["invite", "issueCode", "createNamed"].includes(op)
+      ? shortCode()
+      : null;
     if (code) input.codeDigest = await hash(code);
     const data = await ctx.runMutation(ref("portal"), {
       op,
@@ -145,7 +162,7 @@ const handler = httpActionGeneric(async (ctx, req) => {
       digest: prior,
     });
     const result = response(
-      code ? { code: code.match(/.{1,8}/g).join("-") } : data,
+      code ? { code: code.match(/.{1,4}/g).join("-") } : data,
     );
     if (op === "logout")
       result.headers.append("Set-Cookie", cookie("session", "", 0));

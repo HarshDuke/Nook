@@ -52,6 +52,10 @@ function form(parent, fields, submitLabel, onSubmit) {
     input.name = key;
     input.required = !!required;
     input.maxLength = key === "notes" ? 2000 : 300;
+    if (key === "code") {
+      input.type = "password";
+      input.autocomplete = "current-password";
+    }
     if (key === "email") input.type = "email";
     l.append(input);
     f.append(l);
@@ -100,7 +104,7 @@ function login() {
       "p",
       request
         ? "Verify your email with Google to request an invitation."
-        : "Use your invited Google account or enter your invitation code.",
+        : "Sign in with your Google account or your personal login code.",
     ),
     google(),
   );
@@ -109,7 +113,7 @@ function login() {
       p,
       "Sign-in could not be completed. Use your invited Google account or contact Nook.",
     );
-  form(p, [["code", "Invitation code", true]], "Use code", async (data) => {
+  form(p, [["code", "Login code", true]], "Use code", async (data) => {
     await api("code", data);
     location.assign("/portal");
   });
@@ -248,16 +252,17 @@ async function admin(p) {
     async (data) => {
       const { code } = await api("invite", data);
       await refresh();
-      p.prepend(
-        el(
-          "output",
-          "Single-use code for " +
-            data.email +
-            " · " +
-            code +
-            " · expires in 7 days",
-        ),
-      );
+      p.prepend(el("output", "Login code for " + data.email + " · " + code));
+    },
+  );
+  form(
+    p,
+    [["name", "Name for code-only account", true]],
+    "Create general-access account",
+    async (data) => {
+      const { code } = await api("createNamed", data);
+      await refresh();
+      p.prepend(el("output", data.name + " · " + code));
     },
   );
   p.append(el("h3", "People and requests"));
@@ -269,7 +274,7 @@ async function admin(p) {
       el(
         "p",
         [
-          person.email,
+          person.email || "Code login",
           person.status,
           person.company || "General",
           person.logins + " sign-ins",
@@ -279,18 +284,38 @@ async function admin(p) {
       ),
     );
     if (person.status === "approved") {
-      const settings = el("details"); settings.append(el("summary","Sign-in addresses and invitation code")); row.append(settings);
-      for (const alias of (d.aliases || []).filter(a=>a.person===person._id)) {
-        settings.append(el("p",alias.email),button("Remove "+alias.email,async()=>{
-          await api("removeAlias",{email:person.email,address:alias.email}); await refresh();
-        }));
+      const settings = el("details");
+      settings.append(el("summary", "Sign-in addresses and login code"));
+      row.append(settings);
+      for (const alias of (d.aliases || []).filter(
+        (a) => a.person === person._id,
+      )) {
+        settings.append(
+          el("p", alias.email),
+          button("Remove " + alias.email, async () => {
+            await api("removeAlias", {
+              personId: person._id,
+              address: alias.email,
+            });
+            await refresh();
+          }),
+        );
       }
-      form(settings,[["address","Additional Google email",true]],"Add address",async ({address})=>{
-        await api("addAlias",{email:person.email,address}); await refresh();
-      });
-      settings.append(button("Create single-use code",async()=>{
-        const {code}=await api("issueCode",{email:person.email}); settings.append(el("output",code+" · expires in 7 days"));
-      }));
+      form(
+        settings,
+        [["address", "Additional Google email", true]],
+        "Add address",
+        async ({ address }) => {
+          await api("addAlias", { personId: person._id, address });
+          await refresh();
+        },
+      );
+      settings.append(
+        button("Replace login code", async () => {
+          const { code } = await api("issueCode", { personId: person._id });
+          settings.append(el("output", code));
+        }),
+      );
     }
     if (person.description) row.append(el("p", person.description));
     if (person.role !== "admin") {
@@ -315,7 +340,7 @@ async function admin(p) {
       ])
         row.append(
           button(label, async () => {
-            await api(op, { email: person.email, company: select.value });
+            await api(op, { personId: person._id, company: select.value });
             await refresh();
           }),
         );
@@ -349,7 +374,9 @@ async function admin(p) {
       if (r[k]) row.append(el("p", k + " · " + r[k]));
     p.append(row);
   }
-  const names = new Map(d.people.map((person) => [person._id, person.email]));
+  const names = new Map(
+    d.people.map((person) => [person._id, person.email || person.name]),
+  );
   p.append(el("h3", "Recent activity"));
   table(
     p,

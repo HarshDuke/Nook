@@ -5,7 +5,7 @@ const str = v.string(),
   maybe = v.optional(str);
 export default defineSchema({
   people: defineTable({
-    email: str,
+    email: maybe,
     name: str,
     subject: maybe,
     status: str,
@@ -17,7 +17,16 @@ export default defineSchema({
     lastActive: v.optional(num),
     epoch: num,
   }).index("email", ["email"]),
-  aliases: defineTable({email: str, person: v.id("people"), subject: maybe}).index("email", ["email"]).index("person", ["person"]),
+  loginCodes: defineTable({ person: v.id("people"), digest: str })
+    .index("person", ["person"])
+    .index("digest", ["digest"]),
+  attempts: defineTable({ bucket: str, minute: num, count: num }).index(
+    "bucket",
+    ["bucket"],
+  ),
+  aliases: defineTable({ email: str, person: v.id("people"), subject: maybe })
+    .index("email", ["email"])
+    .index("person", ["person"]),
   invites: defineTable({
     digest: str,
     person: v.id("people"),

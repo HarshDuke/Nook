@@ -48,7 +48,9 @@ export const google = mutation({
     const email = emailKey(a.email),
       prior = await context(db, a.prior);
     const alias = await by(db, "aliases", "email", email);
-    let p = alias ? await db.get(alias.person) : await by(db, "people", "email", email);
+    let p = alias
+      ? await db.get(alias.person)
+      : await by(db, "people", "email", email);
     if (prior && prior.person._id !== p?._id)
       throw Error("Use the invited Google account.");
 
@@ -71,11 +73,38 @@ export const google = mutation({
         ((alias || p).subject && (alias || p).subject !== a.subject)
       )
         throw Error("Access unavailable");
-      if (alias) await db.patch(alias._id, {subject: a.subject});
+      if (alias) await db.patch(alias._id, { subject: a.subject });
       else await db.patch(p._id, { subject: a.subject, name: a.name });
     }
     if (prior) await db.delete(prior.session._id);
     await issue(db, p, a.fresh, true);
+  },
+});
+async function setCode(db, person, digest) {
+  const old = await by(db, "loginCodes", "person", person);
+  if (old) await db.delete(old._id);
+  if (await by(db, "loginCodes", "digest", digest))
+    throw Error("Please try again");
+  await db.insert("loginCodes", { person, digest });
+}
+
+export const loginCode = mutation({
+  args: { code: v.string(), fresh: v.string() },
+  handler: async ({ db }, { code, fresh }) => {
+    const bucket = code.slice(0, 1),
+      minute = Math.floor(Date.now() / 60000);
+    const attempts = await by(db, "attempts", "bucket", bucket);
+    if (attempts?.minute === minute && attempts.count >= 60) return false;
+    const credential = await by(db, "loginCodes", "digest", code);
+    const person = credential && (await db.get(credential.person));
+    if (!person || person.status !== "approved") {
+      const count = attempts?.minute === minute ? attempts.count + 1 : 1;
+      if (attempts) await db.patch(attempts._id, { minute, count });
+      else await db.insert("attempts", { bucket, minute, count });
+      return false;
+    }
+    await issue(db, person, fresh, true);
+    return true;
   },
 });
 export const redeem = mutation({
@@ -178,30 +207,54 @@ export const portal = mutation({
       await log(db, p._id, i.shared ? "Shared report" : "Withdrew report", id);
       return true;
     }
-    const email = emailKey(clean(i.email, 254));
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) throw Error("Invalid email");
-    let target = await by(db, "people", "email", email);
-    if (await by(db,"aliases","email",email)) throw Error("Use the primary account address");
-    if (["addAlias","removeAlias","issueCode"].includes(a.op)) {
-      if (!target || target.status !== "approved") throw Error("Approved account required");
-      if (target.role === "admin" && target._id !== p._id) throw Error("Administrator protected");
+    if (a.op === "createNamed") {
+      const name = clean(i.name, 100);
+      if (!name) throw Error("Enter a name");
+      const person = await db.insert("people", {
+        name,
+        status: "approved",
+        role: "viewer",
+        epoch: 1,
+        logins: 0,
+      });
+      await setCode(db, person, i.codeDigest);
+      await log(db, p._id, "Created code login", name);
+      return true;
+    }
+    const email = emailKey(clean(i.email || "", 254));
+    const targetId = i.personId && db.normalizeId("people", clean(i.personId));
+    let target = targetId
+      ? await db.get(targetId)
+      : await by(db, "people", "email", email);
+    if (!target && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email))
+      throw Error("Invalid email");
+    if (await by(db, "aliases", "email", email))
+      throw Error("Use the primary account address");
+    if (["addAlias", "removeAlias", "issueCode"].includes(a.op)) {
+      if (!target || target.status !== "approved")
+        throw Error("Approved account required");
+      if (target.role === "admin" && target._id !== p._id)
+        throw Error("Administrator protected");
       if (a.op === "issueCode") {
-        await db.insert("invites",{person:target._id,digest:i.codeDigest,epoch:target.epoch,expires:Date.now()+7*DAY,used:false});
-        await log(db,p._id,"Issued invitation code",email);
+        await setCode(db, target._id, i.codeDigest);
+        await log(db, p._id, "Issued invitation code", email);
         return true;
       }
-      const address = emailKey(clean(i.address,254));
-      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(address)) throw Error("Invalid email");
-      const existing = await by(db,"aliases","email",address);
+      const address = emailKey(clean(i.address, 254));
+      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(address))
+        throw Error("Invalid email");
+      const existing = await by(db, "aliases", "email", address);
       if (a.op === "addAlias") {
-        if (existing || await by(db,"people","email",address)) throw Error("Address already assigned");
-        await db.insert("aliases",{person:target._id,email:address});
+        if (existing || (await by(db, "people", "email", address)))
+          throw Error("Address already assigned");
+        await db.insert("aliases", { person: target._id, email: address });
       } else {
-        if (!existing || existing.person !== target._id) throw Error("Unknown address");
+        if (!existing || existing.person !== target._id)
+          throw Error("Unknown address");
         await db.delete(existing._id);
-        await db.patch(target._id,{epoch:target.epoch+1});
+        await db.patch(target._id, { epoch: target.epoch + 1 });
       }
-      await log(db,p._id,a.op,email+" · "+address);
+      await log(db, p._id, a.op, email + " · " + address);
       return true;
     }
     if (target?.role === "admin") throw Error("Administrator protected");
@@ -230,14 +283,11 @@ export const portal = mutation({
       });
       target = await db.get(id);
     }
-    if (a.op === "invite")
-      await db.insert("invites", {
-        person: target._id,
-        digest: i.codeDigest,
-        epoch: target.epoch,
-        expires: Date.now() + 7 * DAY,
-        used: false,
-      });
+    if (a.op === "invite") await setCode(db, target._id, i.codeDigest);
+    if (status !== "approved") {
+      const code = await by(db, "loginCodes", "person", target._id);
+      if (code) await db.delete(code._id);
+    }
     await log(db, p._id, a.op, email);
     return true;
   },
