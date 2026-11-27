@@ -1,0 +1,15 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="robots" content="noindex"><title>Nook · Orchard previews</title>
+<style>
+*{box-sizing:border-box}body{margin:0;font:14px/1.4 system-ui,sans-serif;background:#18241a;color:#fffdf3}main{position:relative;min-height:100svh;background:url(orchard.jpg) 54% center/cover}main::before{content:"";position:absolute;inset:0;background:linear-gradient(to top,#091809b8,transparent 27%);pointer-events:none}.lock{position:absolute;inset:auto auto max(6vh,24px) 5vw;display:flex;align-items:baseline;gap:22px}.brand{font: bold 34px/.95 Georgia,serif;letter-spacing:-.075em}.brand::after{content:"";display:inline-block;background:#c7e699;width:.12em;height:.12em;margin-left:.07em;vertical-align:.22em}.login{font-size:14px;line-height:44px;color:inherit;text-decoration:underline;text-underline-offset:4px}.login:focus-visible,nav a:focus-visible{outline:3px solid #bff77d}.stack .lock{align-items:flex-start;flex-direction:column;gap:0}.split .lock{inset:0;display:block}.split .brand{position:absolute;left:5vw;top:5vh}.split .login{position:absolute;right:5vw;top:5vh}.split::before{background:linear-gradient(to bottom,#091809b8,transparent 24%)}.center .lock{left:50%;transform:translateX(-50%);align-items:center;flex-direction:column;gap:0;white-space:nowrap}.center .brand{font-size:27px}nav{background:#faf8ef;color:#193121;display:flex;gap:10px 22px;padding:10px 5vw;align-items:center;flex-wrap:wrap}nav a{color:inherit;text-underline-offset:4px}nav a[aria-current]{font-weight:bold}nav~main{min-height:calc(100svh - 40px)}
+</style></head><body><nav aria-label="Compare layouts"><a href="#stack">1 · Lower left</a><a href="#split">2 · Top corners</a><a href="#center">3 · Bottom center</a></nav>
+<main class="stack"><div class="lock"><span class="brand" aria-label="Nook">nook</span><a class="login" href="https://app.nookinfra.com/login">Log in to see more ↗</a></div></main>
+<script>
+function selectLayout(){
+ const links=[...document.querySelectorAll('nav a')];
+ const selected=links.find(link=>link.hash===location.hash)||links[0];
+ document.querySelector('main').className=selected.hash.slice(1);
+ for(const link of links){if(link===selected)link.setAttribute('aria-current','page');else link.removeAttribute('aria-current')}
+}
+addEventListener('hashchange',selectLayout);selectLayout();
+</script></body></html>
