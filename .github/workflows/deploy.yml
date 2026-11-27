@@ -1,14 +1,6 @@
 name: Deploy Nook homepage
 on:
   workflow_dispatch:
-  push:
-    branches: [main]
-    paths:
-      - 'src/**'
-      - 'public/**'
-      - 'drizzle/**'
-      - 'scripts/build.mjs'
-      - 'wrangler.jsonc'
 permissions:
   contents: read
 concurrency:
@@ -16,6 +8,7 @@ concurrency:
   cancel-in-progress: false
 jobs:
   deploy:
+    if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
