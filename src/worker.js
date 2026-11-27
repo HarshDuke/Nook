@@ -75,11 +75,24 @@ async function admin(request,env){
 }
 export default {async fetch(request,env={}){
  const url=new URL(request.url);const path=url.pathname.replace(/\/$/,'')||'/';
+ const portalOrigin=env.PORTAL_ORIGIN||url.origin;
+ if(['/login','/portal'].includes(path)&&url.origin!==portalOrigin)return Response.redirect(portalOrigin+path+url.search,302);
+ if(path.startsWith('/api/portal/')){
+   if(url.origin!==portalOrigin)return json({error:'Use the portal domain.'},403);
+   const upstream=env.CONVEX_SITE_URL;
+   if(!upstream)return json({error:'Portal setup is pending.'},503);
+   const headers=new Headers();
+   for(const key of ['Cookie','Content-Type','Origin'])if(request.headers.has(key))headers.set(key,request.headers.get(key));
+   return fetch(new URL(url.pathname+url.search,upstream),{method:request.method,headers,body:['GET','HEAD'].includes(request.method)?undefined:request.body,redirect:'manual'});
+ }
  if(path.startsWith('/api/capacity/'))return capacityAPI(request,env);
  if(path==='/api/submissions'){if(request.method!=='POST')return json({error:'Method not allowed'},405,{Allow:'POST'});return submitSite(request,env);}
  if(!['GET','HEAD'].includes(request.method))return json({error:'Method not allowed'},405,{Allow:'GET, HEAD'});
  let response;
- if(path==='/capacity')response=new Response(ASSETS.lab,{headers:{...securityHeaders,'Content-Type':'text/html; charset=utf-8','Cache-Control':'no-store','X-Robots-Tag':'noindex'}});
+ if(path==='/portal'||path==='/login')response=html(ASSETS.portal,'Nook | Customer portal');
+ else if(path==='/portal.js')response=new Response(ASSETS.portalJS,{headers:{...securityHeaders,'Content-Type':'application/javascript'}});
+ else if(path==='/portal-photo.jpg')response=new Response(Uint8Array.from(atob(ASSETS.portalPhoto),c=>c.charCodeAt(0)),{headers:{...securityHeaders,'Content-Type':'image/jpeg','Cache-Control':'public, max-age=3600'}});
+ else if(path==='/capacity')response=new Response(ASSETS.lab,{headers:{...securityHeaders,'Content-Type':'text/html; charset=utf-8','Cache-Control':'no-store','X-Robots-Tag':'noindex'}});
  else if(path==='/capacity.js')response=new Response(ASSETS.labJS,{headers:{...securityHeaders,'Content-Type':'application/javascript; charset=utf-8','Cache-Control':'no-store'}});
  else if(path==='/capacity.css')response=new Response(ASSETS.labCSS,{headers:{...securityHeaders,'Content-Type':'text/css; charset=utf-8','Cache-Control':'no-store'}});
  else if(path==='/styles.css')response=new Response(ASSETS.css,{headers:{...securityHeaders,'Content-Type':'text/css; charset=utf-8','Cache-Control':'public, max-age=300'}});

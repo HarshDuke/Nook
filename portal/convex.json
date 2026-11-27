@@ -1,0 +1,20 @@
+{
+  "authKit": {
+    "dev": {
+      "configure": {
+        "redirectUris": [
+          "http://localhost:5173/api/portal/callback"
+        ]
+      }
+    },
+    "prod": {
+      "environmentType": "production",
+      "configure": {
+        "redirectUris": [
+          "https://app.nookinfra.com/api/portal/callback"
+        ],
+        "appHomepageUrl": "https://app.nookinfra.com"
+      }
+    }
+  }
+}
