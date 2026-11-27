@@ -121,34 +121,14 @@ function login() {
 function textBlock(p, title, body) {
   p.append(el("h3", title), el("p", body));
 }
-function learn(p) {
-  p.append(
-    el("h1", "Learn More"),
-    el(
-      "p",
-      "Nook develops modular data centers where power is already available. We evaluate four kinds of sites.",
-    ),
-  );
-  textBlock(
-    p,
-    "Power generation",
-    "Locate compute beside generators that periodically have to curtail output.",
-  );
-  textBlock(
-    p,
-    "Distributed energy",
-    "Match smaller compute installations to local energy resources.",
-  );
-  textBlock(
-    p,
-    "Existing utility service",
-    "Use interval meter readings to find capacity an industrial site can share.",
-  );
-  textBlock(
-    p,
-    "Expanded service",
-    "Evaluate sites where an upgrade or a new substation connection can support growth.",
-  );
+function overview(panel, openAssessment) {
+  panel.className = "nook-overview";
+  panel.append(document.querySelector("#nook-overview").content.cloneNode(true));
+  panel.querySelector("[data-open-assessment]").onclick = (event) => {
+    event.preventDefault();
+    openAssessment();
+    window.scrollTo(0, 0);
+  };
 }
 function owners(p) {
   p.append(el("h1", "For Site Owners"));
@@ -435,29 +415,31 @@ async function boot() {
     p.append(logout());
     return;
   }
-  const layout = el("div", null, "layout"),
-    nav = el("aside"),
-    holder = el("div");
-  root.replaceChildren(layout);
-  layout.append(nav, holder);
+  const header = document.querySelector(".workspace-header");
+  const nav = el("nav", null, "workspace-nav");
+  nav.setAttribute("aria-label", "Workspace");
+  const exit = logout();
+  exit.className = "workspace-logout";
+  header.append(nav, exit);
   const tabs = [
-    ...(me.company ? [[me.company, (p) => company(p, me.company)]] : []),
-    ["Learn More", learn],
+    ["What is Nook", (panel) => overview(panel, () => assessmentButton.click())],
+    ...(me.company ? [[me.company, (panel) => company(panel, me.company)]] : []),
     ["For Site Owners", owners],
     ["Assess Your Site", assess],
     ...(me.admin ? [["People & Access", admin]] : []),
   ];
+  let assessmentButton;
   for (const [label, show] of tabs) {
     const b = button(label, async () => {
       for (const other of nav.children) other.removeAttribute("aria-current");
-      b.setAttribute("aria-current", "true");
-      const p = el("section", null, "panel");
-      holder.replaceChildren(p);
-      await show(p);
+      b.setAttribute("aria-current", "page");
+      const panel = el("section", null, "panel workspace-page");
+      root.replaceChildren(panel);
+      await show(panel);
     });
+    if (show === assess) assessmentButton = b;
     nav.append(b);
   }
-  nav.append(logout());
   nav.firstChild.click();
 }
 boot().catch((e) => message(root, e.message));
