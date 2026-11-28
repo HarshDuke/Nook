@@ -51,3 +51,5 @@ yarn-error.log*
 
 /portal/node_modules/
 /portal/.convex/
+
+/public/internal-studies/

@@ -6,7 +6,7 @@ const securityHeaders = {
  'Content-Security-Policy':"default-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data:; script-src 'self'; connect-src 'self'; base-uri 'none'; form-action 'self'; object-src 'none'",
 };
 const esc=value=>String(value).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-function html(body,title='Nook | Power, put to work',script=false,status=200){return new Response(`<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${esc(title)}</title><meta name="description" content="Nook is developing modular data centers at existing industrial sites with underused power. Explore your site's potential."><meta name="theme-color" content="#102d25"><meta property="og:title" content="${esc(title)}"><meta property="og:description" content="Modular data centers. Overlooked power. A new footprint for compute."><meta property="og:type" content="website"><link rel="icon" href="/favicon.svg" type="image/svg+xml"><link rel="stylesheet" href="/styles.css?v=workspace-overview">${script?'<script src="/form.js" defer></script>':''}</head><body>${body}</body></html>`,{status,headers:{...securityHeaders,'Content-Type':'text/html; charset=utf-8','Cache-Control':'no-store'}});}
+function html(body,title='Nook | Power, put to work',script=false,status=200){return new Response(`<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${esc(title)}</title><meta name="description" content="Nook is developing modular data centers at existing industrial sites with underused power. Explore your site's potential."><meta name="theme-color" content="#102d25"><meta property="og:title" content="${esc(title)}"><meta property="og:description" content="Modular data centers. Overlooked power. A new footprint for compute."><meta property="og:type" content="website"><link rel="icon" href="/favicon.svg" type="image/svg+xml"><link rel="stylesheet" href="/styles.css?v=owner-study">${script?'<script src="/form.js" defer></script>':''}</head><body>${body}</body></html>`,{status,headers:{...securityHeaders,'Content-Type':'text/html; charset=utf-8','Cache-Control':'no-store'}});}
 function header(active='home'){return `<a class="skip-link" href="#main">Skip to content</a><header class="header"><a class="wordmark" href="/" aria-label="Nook home">nook<span class="brand-mark" aria-hidden="true">▪</span></a><nav aria-label="Main navigation"><a href="/" ${active==='home'?'aria-current="page"':''}>Overview</a><a href="/submit-site" ${active==='submit'?'aria-current="page"':''}>Submit a site</a></nav><span class="header-descriptor">Power, put to work.</span></header>`;}
 const footer=()=>`<footer class="footer wrap"><a class="wordmark" href="/" aria-label="Nook home">nook<span class="brand-mark" aria-hidden="true">▪</span></a><p>A new footprint for compute.</p><div><a href="/submit-site">Submit a site</a><a href="/privacy">Privacy</a><span>© ${new Date().getFullYear()} Nook</span></div></footer>`;
 const page=(content,active)=>content.replace('{{HEADER}}',header(active)).replace('{{FOOTER}}',footer());
@@ -73,9 +73,36 @@ async function admin(request,env){
  return html(header('')+`<main id="main" class="wrap" style="padding-top:50px;padding-bottom:70px;max-width:1600px"><p class="eyebrow">Nook team</p><h1 style="font-size:2.5rem;margin:20px 0">Site submissions</h1><p style="margin-bottom:25px">Showing the most recent ${result.results.length} submissions. This page is private.</p><table class="admin-table"><thead><tr><th>Received</th><th>Contact</th><th>Site</th><th>Power & timing</th><th>Notes</th></tr></thead><tbody>${rows||'<tr><td colspan="5">No submissions yet.</td></tr>'}</tbody></table></main>`+footer(),'Site submissions | Nook');
  }catch{return html(header('')+'<main id="main" class="privacy-content wrap"><h1>Temporarily unavailable</h1><p>Please try again in a moment.</p></main>'+footer(),'Site submissions | Nook',false,503);}
 }
+async function serveStudy(request, env, path) {
+ const url = new URL(request.url);
+ if (url.origin !== env.PORTAL_ORIGIN || request.method !== 'GET') return json({error:'Unavailable'},403);
+ if (!request.headers.get('Cookie')) return json({error:'Please sign in.'},401);
+ async function portal(op) {
+   const r = await fetch(new URL('/api/portal/'+op,env.CONVEX_SITE_URL), {
+     method:'POST', headers:{Origin:env.PORTAL_ORIGIN,Cookie:request.headers.get('Cookie'),'Content-Type':'application/json'}, body:'{}'
+   });
+   return r.ok ? r.json() : null;
+ }
+ const me = await portal('me');
+ if (!me?.linked || me.status !== 'approved' || (!me.admin && me.company !== 'Sky Harbour')) return json({error:'Report unavailable'},403);
+ const reports = me.admin ? (await portal('dashboard'))?.reports?.filter(r=>r.company==='Sky Harbour' && r.shared) : await portal('sites');
+ if (!Array.isArray(reports) || !['Sugar Land Regional Airport','Nashville International Airport'].every(site=>reports.some(r=>r.site===site))) return json({error:'Report unavailable'},403);
+ const archive = path === '/site-files/models.zip';
+ const asset = await env.SITE_ASSETS.fetch(new URL('/internal-studies/'+(archive?'models.zip':'case.txt'),url));
+ if (!asset.ok) return json({error:'Study file unavailable'},503);
+ const headers = new Headers(securityHeaders);
+ headers.set('Cache-Control','private, no-store');
+ headers.set('X-Robots-Tag','noindex');
+ headers.set('Content-Type',archive?'application/zip':'text/html; charset=utf-8');
+ if (archive) headers.set('Content-Disposition','attachment; filename="Nook-Sky-Harbour-study.zip"');
+ return new Response(asset.body,{headers});
+}
 export default {async fetch(request,env={}){
  const url=new URL(request.url);const path=url.pathname.replace(/\/$/,'')||'/';
  const portalOrigin=env.PORTAL_ORIGIN||url.origin;
+ if (path==='/site-files/study.html' || path==='/site-files/models.zip') return serveStudy(request,env,path);
+ if (env.SITE_ASSETS && /^\/nook-studies(?:\/[a-zA-Z0-9_-]+(?:\.[a-zA-Z0-9]+)?)*\/?$/.test(url.pathname) && ['GET','HEAD'].includes(request.method)) return env.SITE_ASSETS.fetch(request);
+
  if(['/login','/portal'].includes(path)&&url.origin!==portalOrigin)return Response.redirect(portalOrigin+path+url.search,302);
  if(path.startsWith('/api/portal/')){
    if(url.origin!==portalOrigin)return json({error:'Use the portal domain.'},403);

@@ -130,24 +130,12 @@ function overview(panel, openAssessment) {
     window.scrollTo(0, 0);
   };
 }
-function owners(p) {
-  p.append(el("h1", "For Site Owners"));
-  textBlock(
-    p,
-    "Start with the property",
-    "Tell us where the site is, who supplies its power, what space is available and which loads you expect to add.",
-  );
-  textBlock(
-    p,
-    "Measure the headroom",
-    "We compare your service limit with a year of interval demand. Utility bills, equipment schedules and planned expansions help us interpret the peaks.",
-  );
-  textBlock(
-    p,
-    "Review the opportunity",
-    "Nook estimates the IT load your site can support, models battery options and reviews fiber, siting and commercial terms with you.",
-  );
+function owners(panel, openAssessment) {
+  panel.className = "owner-guide";
+  panel.append(document.querySelector("#owner-guide").content.cloneNode(true));
+  for (const action of panel.querySelectorAll("[data-assess]")) action.onclick = openAssessment;
 }
+
 async function assess(p) {
   p.append(el("h1", "Assess Your Site"));
   form(
@@ -177,10 +165,22 @@ async function assess(p) {
       el("p", row.site + " · " + row.address + " · " + date(row._creationTime)),
     );
 }
-async function company(p, name) {
+async function company(p, name, adminView = false) {
   p.append(el("h1", name));
-  const rows = await api("sites");
+  const rows = adminView
+    ? (await api("dashboard")).reports.filter(r => r.company === name && r.shared).map(r => ({...r, id:r._id}))
+    : await api("sites");
   if (!rows.length) p.append(el("p", "Your shared analyses will appear here."));
+  if (name === "Sky Harbour" && ["Sugar Land Regional Airport", "Nashville International Airport"].every(site => rows.some(r => r.site === site))) {
+    const study = el("div", null, "study-entry");
+    study.append(el("h2", "How much compute could the hangars support?"), el("p", "Compare two operating campuses across four battery sizes. The study includes the earlier Stewart stress test, financing sensitivities and the full synthetic load data."));
+    for (const [label, path] of [["Open full study ↗", "study.html"], ["Download models and data (ZIP)", "models.zip"]]) {
+      const link = el("a", label);
+      link.href = "/site-files/" + path;
+      study.append(link);
+    }
+    p.append(study, el("h3", "Campus summaries"));
+  }
   for (const row of rows) {
     p.append(
       button(row.site, async () => {
@@ -207,12 +207,72 @@ async function company(p, name) {
         p.append(
           button("Back to sites", async () => {
             p.replaceChildren();
-            await company(p, name);
+            await company(p, name, adminView);
           }),
         );
       }),
     );
   }
+}
+async function customers(panel) {
+  const data = await api("dashboard");
+  panel.append(el("h1", "Customers"));
+  const picker = el("select");
+  const label = el("label", "Customer or person");
+  label.append(picker);
+  const body = el("div", null, "customer-detail");
+  panel.append(label, body);
+  const people = new Map(data.people.map(person => [person._id, person]));
+  const companies = [...new Set([...data.reports, ...data.people].map(r => r.company).filter(Boolean))].sort();
+  function group(title, options) {
+    const list = el("optgroup");
+    list.label = title;
+    for (const [value, name] of options) {
+      const option = el("option", name);
+      option.value = value;
+      list.append(option);
+    }
+    picker.append(list);
+  }
+  group("Companies", companies.map(name => ["org/" + name, name]));
+  group("People", [...people.values()].sort((a,b) => a.name.localeCompare(b.name)).map(p => [p._id, [p.name, p.email, p.status].filter(Boolean).join(" · ")]));
+  function render() {
+    const person = people.get(picker.value);
+    const org = person ? person.company : picker.value.slice(4);
+    const members = person ? [person] : data.people.filter(p => p.company === org);
+    const ids = new Set(members.map(p => p._id));
+    body.replaceChildren(el("h2", person?.name || person?.email || org));
+    table(body, ["Person", "Access", "Sign-ins", "Last active"], members.map(p => [p.name || p.email, p.role + " · " + p.status, p.logins, date(p.lastActive)]));
+    body.append(el("h3", "Company reports"));
+    const reports = data.reports.filter(r => r.company === org);
+    if (!reports.length) body.append(el("p", "No company reports assigned."));
+    for (const r of reports) {
+      const details = el("details");
+      details.append(el("summary", r.site + (r.shared ? " · Shared" : " · Draft")), el("p", r.summary));
+      table(details, ["Scenario", "IT MW at 99% of days", "Strict IT MW", "Battery MW", "Battery MWh"],r.rows.map(s=>[s.scenario,...[s.it,s.strict,s.battery,s.mwh].map(n=>n.toFixed(2))]));
+      body.append(details);
+    }
+    if (org === "Sky Harbour" && reports.filter(r=>r.shared).length >= 2) {
+      const link=el("a","Open full Sky Harbour study ↗"); link.href="/site-files/study.html"; body.append(link);
+    }
+    body.append(el("h3", "Site submissions"));
+    const submissions = data.submissions.filter(s => ids.has(s.person));
+    if (!submissions.length) body.append(el("p", "No site submissions yet."));
+    for (const r of submissions) {
+      const details = el("details");
+      details.append(el("summary", r.site + " · " + (people.get(r.person)?.name || "") + " · " + date(r._creationTime)));
+      for(const [key,title] of [["address","Location"],["utility","Utility"],["connection","Service capacity"],["consumption","Demand"],["future","Planned loads"],["internet","Internet"],["zoning","Zoning"],["notes","Notes"]]) {
+        if(r[key]) details.append(el("p",title + " · " + r[key]));
+      }
+      body.append(details);
+    }
+    body.append(el("h3", "Recent activity"));
+    const events = data.activity.filter(e => ids.has(e.person));
+    if(events.length) table(body, ["When","Person","Event","Detail"],events.map(e => [date(e._creationTime),people.get(e.person)?.name,e.event,e.detail]));
+    else body.append(el("p", "No recent activity recorded."));
+  }
+  picker.onchange = render;
+  if(picker.options.length) render();
 }
 async function admin(p) {
   const d = await api("dashboard");
@@ -424,22 +484,28 @@ async function boot() {
   const tabs = [
     ["What is Nook", (panel) => overview(panel, () => assessmentButton.click())],
     ...(me.company ? [[me.company, (panel) => company(panel, me.company)]] : []),
-    ["For Site Owners", owners],
+    ...(me.admin && me.company !== "Sky Harbour" ? [["Sky Harbour", panel => company(panel, "Sky Harbour", true)]] : []),
+    ["For Site Owners", panel => owners(panel, () => { assessmentButton.click(); window.scrollTo(0, 0); })],
     ["Assess Your Site", assess],
-    ...(me.admin ? [["People & Access", admin]] : []),
+    ...(me.admin ? [["Customers", customers], ["People & Access", admin]] : []),
   ];
   let assessmentButton;
+  let requestedButton;
+  const initialHash = location.hash;
   for (const [label, show] of tabs) {
     const b = button(label, async () => {
       for (const other of nav.children) other.removeAttribute("aria-current");
       b.setAttribute("aria-current", "page");
+      history.replaceState(null, "", hash);
       const panel = el("section", null, "panel workspace-page");
       root.replaceChildren(panel);
       await show(panel);
     });
+    const hash = "#" + label.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/-$/, "");
+    if (initialHash === hash) requestedButton = b;
     if (show === assess) assessmentButton = b;
     nav.append(b);
   }
-  nav.firstChild.click();
+  (requestedButton || nav.firstChild).click();
 }
 boot().catch((e) => message(root, e.message));
