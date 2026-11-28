@@ -133,13 +133,13 @@ const handler = httpActionGeneric(async (ctx, req) => {
     const input = JSON.parse(body);
     if (op === "code" || op === "adminCode") {
       const token = random();
-      const value = String(input.code).replace(/[\s-]/g, "").toLowerCase();
-      const args = { code: await hash(value), fresh: await hash(token) };
       const adminLogin = op === "adminCode";
+      const value = adminLogin ? String(input.code || "") : String(input.code).replace(/[\s-]/g, "").toLowerCase();
+      const args = { code: await hash(value), fresh: await hash(token) };
       const legacy = !adminLogin && /^[0-9a-f]{32}$/.test(value);
       if (legacy) await ctx.runMutation(ref("redeem"), args);
       else if (
-        value.length !== (adminLogin ? 26 : 12) ||
+        (adminLogin ? value.length < 12 || value.length > 128 : value.length !== 12) ||
         !(await ctx.runMutation(ref("loginCode"), { ...args, adminLogin }))
       )
         return response(

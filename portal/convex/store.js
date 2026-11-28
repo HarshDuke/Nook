@@ -97,8 +97,13 @@ export const provisionAdministrator = mutation({
     const existing = await db.query("people").filter(q => q.eq(q.field("name"), name)).unique();
     if (existing) {
       const credential = await by(db, "loginCodes", "person", existing._id);
-      if (existing.role === "admin" && credential?.digest === digest) return;
-      throw Error("Administrator already exists");
+      if (existing.role !== "admin" || existing.status !== "approved") throw Error("Administrator unavailable");
+      if (credential?.digest !== digest) {
+        await setCode(db, existing._id, digest);
+        await db.patch(existing._id, {epoch: existing.epoch + 1});
+        await log(db, existing._id, "Rotated administrator code");
+      }
+      return;
     }
     const id = await db.insert("people", { name, role: "admin", status: "approved", logins: 0, epoch: 1 });
     await setCode(db, id, digest);
@@ -161,6 +166,7 @@ export const portal = mutation({
       i = a.input;
     if (a.op === "logout") {
       await db.delete(s._id);
+      await log(db,p._id,"Signed out");
       return true;
     }
     if (a.op === "me") {
@@ -180,6 +186,13 @@ export const portal = mutation({
     }
     if (p.status !== "approved" || !s.verified)
       throw Error("Verified membership required");
+    if (a.op === "view") {
+      const page = clean(i.page,100);
+      if (!["What is Nook","For Site Owners","Assess Your Site","Need compute?",p.company].includes(page))
+        throw Error("Unknown page");
+      await log(db,p._id,"Viewed page",page);
+      return true;
+    }
     if (a.op === "sites") {
       if (!p.company) return [];
       const reports = await db
@@ -214,6 +227,7 @@ export const portal = mutation({
       if (!fields.site || !fields.address)
         throw Error("Missing site or address");
       await db.insert("submissions", { ...fields, person: p._id });
+      await log(db,p._id,"Submitted site",fields.site);
       return true;
     }
     if (a.op === "mine")
@@ -223,10 +237,39 @@ export const portal = mutation({
         .order("desc")
         .take(100);
     if (!canManage(p, s)) throw Error("Administrator access required");
+    if (a.op === "activityPage") {
+      return db.query("activity").order("desc").paginate({cursor: i.cursor || null, numItems: 100});
+    }
+    if (a.op === "mergeUsers") {
+      const keep = await db.get(db.normalizeId("people", clean(i.keep)));
+      const from = await db.get(db.normalizeId("people", clean(i.from)));
+      if (!keep || !from || keep._id === from._id || keep.role !== "viewer" || from.role !== "viewer" ||
+          keep.status !== "approved" || !["approved","pending"].includes(from.status)) throw Error("Ineligible accounts");
+      if (from.email) {
+        const email = emailKey(from.email);
+        if (await by(db,"aliases","email",email)) throw Error("Address already linked");
+        await db.insert("aliases",{person:keep._id,email,...(from.subject ? {subject:from.subject} : {})});
+      }
+      for (const alias of await db.query("aliases").filter(q=>q.eq(q.field("person"),from._id)).collect())
+        await db.patch(alias._id,{person:keep._id});
+      for (const table of ["submissions","activity"]) {
+        for (const row of await db.query(table).withIndex("person",q=>q.eq("person",from._id)).collect())
+          await db.patch(row._id,{person:keep._id});
+      }
+      const obsoleteCode = await by(db,"loginCodes","person",from._id);
+      if (obsoleteCode) await db.delete(obsoleteCode._id);
+      // Old sessions and invitations require a live person record and consequently expire.
+      await db.patch(keep._id,{logins:keep.logins+from.logins,
+        lastLogin:Math.max(keep.lastLogin||0,from.lastLogin||0)||undefined,
+        lastActive:Math.max(keep.lastActive||0,from.lastActive||0)||undefined});
+      await db.delete(from._id);
+      await log(db,p._id,"Merged accounts",(from.email || from.name) + " into " + (keep.email || keep.name));
+      return true;
+    }
     if (a.op === "dashboard")
       return {
-        people: await db.query("people").order("desc").take(250),
-        aliases: await db.query("aliases").take(2000),
+        people: await db.query("people").order("desc").collect(),
+        aliases: await db.query("aliases").collect(),
         activity: await db.query("activity").order("desc").take(150),
         reports: await db.query("reports").take(150),
         submissions: await db.query("submissions").order("desc").take(150),

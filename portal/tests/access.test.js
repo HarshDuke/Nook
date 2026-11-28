@@ -174,3 +174,25 @@ test("Google callback binds the browser state and accepts a verified identity", 
     globalThis.fetch = nativeFetch;
   }
 });
+
+test("merging a pending Google identity preserves the chosen viewer and invalidates the old session", async () => {
+  const db = convexTest(schema, {...import.meta.glob("../convex/*.js"), "../convex/_generated/server.js":()=>import("convex/server")});
+  const call=(name,args)=>db.mutation(makeFunctionReference("store:"+name),args);
+  const op=(digest,op,input={})=>call("portal",{digest,op,input});
+  const digest="b".repeat(64);
+  await call("provisionAdministrator",{digest});
+  await call("loginCode",{code:digest,fresh:"staff",adminLogin:true});
+  await op("staff","createNamed",{name:"Pilot",codeDigest:"pilot-code"});
+  await call("google",{email:"pilot@example.org",name:"Pilot",subject:"pilot-google",prior:"",fresh:"pending"});
+  const {people}=await op("staff","dashboard");
+  const keep=people.find(p=>p.name==="Pilot" && !p.email)._id;
+  const from=people.find(p=>p.email==="pilot@example.org")._id;
+  await expect(op("pending","mergeUsers",{from,keep})).rejects.toThrow();
+  await op("staff","mergeUsers",{from,keep});
+  await expect(op("pending","me")).rejects.toThrow();
+  await call("google",{email:"pilot@example.org",name:"Pilot",subject:"pilot-google",prior:"",fresh:"google"});
+  expect(await op("google","me")).toMatchObject({status:"approved",admin:false});
+  expect(await call("loginCode",{code:"pilot-code",fresh:"code"})).toBe(true);
+  expect((await op("staff","activityPage")).page.some(x=>x.event==="Merged accounts")).toBe(true);
+  expect((await op("staff","dashboard")).aliases.find(x=>x.email==="pilot@example.org").person).toBe(keep);
+});

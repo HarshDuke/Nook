@@ -89,10 +89,10 @@ function table(parent, headers, rows) {
   parent.append(t);
 }
 const date = (ts) => (ts ? new Date(ts).toLocaleString() : "—");
-const logout = () =>
+const logout = (destination = "/") =>
   button("Log out", async () => {
     await api("logout");
-    location.assign("/");
+    location.assign(destination);
   });
 function login() {
   const p = el("section", null, "panel login-panel");
@@ -101,7 +101,7 @@ function login() {
     p.append(el("h1", "Administrator login"));
     form(p, [["code", "Administrator code", true]], "Log in", async data => {
       await api("adminCode", data);
-      location.assign("/portal#people-access");
+      location.assign("/portal#users");
     });
     return;
   }
@@ -150,24 +150,6 @@ function owners(panel, openAssessment) {
 function compute(panel) {
   panel.className = "compute-guide";
   panel.append(document.querySelector("#compute-guide").content.cloneNode(true));
-}
-
-function peopleWorkspace(panel, activity = false) {
-  const switcher = el("div", null, "people-switcher");
-  const body = el("div");
-  const views = [["Customer activity", customers], ["Manage access", admin]];
-  for (const [label, render] of views) {
-    const tab = button(label, async () => {
-      for (const item of switcher.children) item.removeAttribute("aria-current");
-      tab.setAttribute("aria-current", "page");
-      const section = el("div");
-      body.replaceChildren(section);
-      await render(section);
-    });
-    switcher.append(tab);
-  }
-  panel.append(switcher, body);
-  switcher.children[activity ? 0 : 1].click();
 }
 
 async function assess(p) {
@@ -310,14 +292,22 @@ async function customers(panel) {
 }
 async function admin(p) {
   const d = await api("dashboard");
-  p.replaceChildren(el("h1", "People & Access"));
+  p.replaceChildren(el("h1", "Users"));
   const refresh = () => admin(p);
   const companies = [
     "General access",
     ...new Set(d.reports.map((r) => r.company)),
   ];
+  const pending = el("section");
+  const directory = el("section");
+  const invite = el("details");
+  invite.append(el("summary","Invite or create a user"));
+  pending.append(el("h2","Pending requests"));
+  if (!d.people.some(x=>x.status === "pending")) pending.append(el("p","No pending requests."));
+  directory.append(el("h2","All users"));
+  p.append(pending, invite, directory);
   form(
-    p,
+    invite,
     [
       ["email", "Invite email", true],
       ["company", "Company name (leave blank for general access)"],
@@ -330,7 +320,7 @@ async function admin(p) {
     },
   );
   form(
-    p,
+    invite,
     [["name", "Name for code-only account", true]],
     "Create general-access account",
     async (data) => {
@@ -339,10 +329,10 @@ async function admin(p) {
       p.prepend(el("output", data.name + " · " + code));
     },
   );
-  p.append(el("h3", "People and requests"));
+
   for (const person of d.people) {
     const row = el("div", null, "record");
-    p.append(row);
+    (person.status === "pending" ? pending : directory).append(row);
     row.append(
       el("strong", person.name || person.email),
       el(
@@ -357,7 +347,7 @@ async function admin(p) {
         ].join(" · "),
       ),
     );
-    if (person.status === "approved") {
+    if (person.status === "approved" && person.role !== "admin") {
       const settings = el("details");
       settings.append(el("summary", "Sign-in addresses and login code"));
       row.append(settings);
@@ -420,6 +410,34 @@ async function admin(p) {
         );
     }
   }
+  const merge = el("details");
+  merge.append(el("summary","Merge accounts"));
+  const accounts = d.people.filter(x=>x.role === "viewer" && ["approved","pending"].includes(x.status));
+  function pick(label, eligible) {
+    const select = el("select");
+    select.append(el("option","Select a user"));
+    select.firstChild.value = "";
+    for (const person of eligible) {
+      const emails = [person.email, ...d.aliases.filter(a=>a.person===person._id).map(a=>a.email)].filter(Boolean);
+      const opt = el("option", [person.name, emails.join(", ") || "Code login", person.company || "General", person.status].join(" · "));
+      opt.value = person._id;
+      select.append(opt);
+    }
+    const wrapper = el("label",label);
+    wrapper.append(select);
+    merge.append(wrapper);
+    return select;
+  }
+  const from = pick("Account to merge",accounts);
+  const keep = pick("Approved account to keep",accounts.filter(x=>x.status==="approved"));
+  merge.append(el("p","The kept account retains its access and login code. Emails, site submissions and activity move to it. The merged account’s code and sessions expire."));
+  merge.append(button("Merge accounts",async()=>{
+    if (!from.value || !keep.value || from.value===keep.value) throw Error("Select two different accounts.");
+    if (!window.confirm("Merge " + from.selectedOptions[0].text + " into " + keep.selectedOptions[0].text + "?")) return;
+    await api("mergeUsers",{from:from.value,keep:keep.value});
+    await refresh();
+  }));
+  p.insertBefore(merge, directory);
   p.append(el("h3", "Customer reports"));
   for (const r of d.reports) {
     const row = el("div", null, "record");
@@ -432,36 +450,29 @@ async function admin(p) {
     );
     p.append(row);
   }
-  p.append(el("h3", "Site submissions"));
-  for (const r of d.submissions) {
-    const row = el("details");
-    row.append(el("summary", r.site + " · " + r.address));
-    for (const k of [
-      "utility",
-      "connection",
-      "consumption",
-      "future",
-      "internet",
-      "zoning",
-      "notes",
-    ])
-      if (r[k]) row.append(el("p", k + " · " + r[k]));
-    p.append(row);
+}
+async function activity(p) {
+  const d = await api("dashboard");
+  p.append(el("h1","Activity"));
+  const names = new Map(d.people.map(x=>[x._id,x.name || x.email]));
+  const feed = el("div");
+  p.append(feed);
+  let cursor = null;
+  async function more() {
+    const page = await api("activityPage",{cursor});
+    table(feed,["When","User","Event","Details"],page.page.map(e=>[date(e._creationTime),names.get(e.person)||"Former user",e.event,e.detail]));
+    cursor=page.continueCursor;
+    if (page.isDone) next.remove();
   }
-  const names = new Map(
-    d.people.map((person) => [person._id, person.email || person.name]),
-  );
-  p.append(el("h3", "Recent activity"));
-  table(
-    p,
-    ["When", "User", "Event", "Details"],
-    d.activity.map((e) => [
-      date(e._creationTime),
-      names.get(e.person) || e.person,
-      e.event,
-      e.detail,
-    ]),
-  );
+  const next = button("Load older activity",more);
+  p.append(next);
+  await more();
+  const detail = el("details");
+  detail.append(el("summary","Reports and submissions by customer or user"));
+  const body = el("div");
+  detail.append(body);
+  p.append(detail);
+  detail.ontoggle=async()=>{if(detail.open && !body.children.length) await customers(body);};
 }
 async function boot() {
   if (["/login", "/admin-login"].includes(location.pathname)) {
@@ -512,17 +523,16 @@ async function boot() {
   const header = document.querySelector(".workspace-header");
   const nav = el("nav", null, "workspace-nav");
   nav.setAttribute("aria-label", "Workspace");
-  const exit = logout();
+  const exit = logout(me.admin ? "/admin-login" : "/");
+  if (me.admin) header.querySelector(".portal-brand").href = "/portal#users";
   exit.className = "workspace-logout";
   header.append(nav, exit);
-  const tabs = [
+  const tabs = me.admin ? [["Users", admin], ["Activity", activity]] : [
     ["What is Nook", (panel) => overview(panel, () => assessmentButton.click())],
     ...(me.company ? [[me.company, (panel) => company(panel, me.company)]] : []),
-    ...(me.admin && me.company !== "Sky Harbour" ? [["Sky Harbour", panel => company(panel, "Sky Harbour", true)]] : []),
     ["For Site Owners", panel => owners(panel, () => { assessmentButton.click(); window.scrollTo(0, 0); })],
     ["Assess Your Site", assess],
     ["Need compute?", compute],
-    ...(me.admin ? [["People & Access", panel => peopleWorkspace(panel, location.hash === "#customers")]] : []),
   ];
   let assessmentButton;
   let requestedButton;
@@ -531,15 +541,15 @@ async function boot() {
     const b = button(label, async () => {
       for (const other of nav.children) other.removeAttribute("aria-current");
       b.setAttribute("aria-current", "page");
-      const target = requestedButton === b && initialHash === "#customers" && label === "People & Access" ? "#customers" : hash;
-      history.replaceState(null, "", target);
+      history.replaceState(null, "", hash);
       requestedButton = undefined;
       const panel = el("section", null, "panel workspace-page");
       root.replaceChildren(panel);
       await show(panel);
+      if (!me.admin) api("view",{page:label}).catch(()=>{});
     });
     const hash = "#" + label.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/-$/, "");
-    if (initialHash === hash || (initialHash === "#customers" && label === "People & Access")) requestedButton = b;
+    if (initialHash === hash) requestedButton = b;
     if (show === assess) assessmentButton = b;
     nav.append(b);
   }

@@ -12,8 +12,8 @@ Route app.nookinfra.com to the existing Nook Worker. Set the Worker's PORTAL_ORI
 
 ## First login and reports
 
-Regular users sign in at /login. New Google identities require approval. Approved users can also sign in with their personal codes. Administrators use /admin-login with the dedicated administrator code. People & Access provides invitations, approvals, revocation, company assignments, report publication and recorded activity. Actions performed through the shared administrator login are attributed to that account.
+Regular users sign in at /login. New Google identities require approval. Approved users can also sign in with their personal codes. Administrators use /admin-login with the dedicated administrator code. The Users and Activity tabs provide invitations, approvals, revocation, company assignments, report publication and recorded activity. Actions performed through the shared administrator login are attributed to that account.
 
-On a fresh deployment, generate a random 26-character lowercase alphanumeric code with a cryptographically secure generator, keep it in approved credential storage and pass only its SHA-256 hex digest to the internal store:provisionAdministrator mutation. Verify the new login and dashboard before removing any previous administrator access.
+On a fresh deployment, generate a random case-sensitive code of 12–128 characters with a cryptographically secure generator, keep it in approved credential storage and pass only its SHA-256 hex digest to the internal store:provisionAdministrator mutation. Verify the new login and dashboard before removing any previous administrator access.
 
 Run npx convex run --prod seed:skyHarbour to create the two synthetic Sky Harbour drafts. Share each approved report in Admin and assign the viewer to Sky Harbour. Production acceptance requires testing Google sign-in at the configured callback, an invite in a separate browser, company isolation and revocation.
