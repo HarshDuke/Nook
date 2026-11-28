@@ -15,7 +15,13 @@ test("invite, identity link, company access, approval, audit and revocation", as
     call("google", { email, subject: email, name: email, fresh, prior });
   const op = (digest, op, input = {}) => call("portal", { digest, op, input });
   process.env.NOOK_ADMIN_EMAIL = "owner@example.org";
-  await google("owner@example.org", "admin");
+  const adminDigest = "a".repeat(64);
+  await call("provisionAdministrator", { digest: adminDigest });
+  expect(await call("loginCode", {code: adminDigest, fresh: "wrong-entry"})).toBe(false);
+  expect(await call("loginCode", {code: adminDigest, fresh: "admin", adminLogin: true})).toBe(true);
+  await google("owner@example.org", "owner");
+  expect((await op("owner", "me")).admin).toBe(false);
+  await op("admin", "approve", {email: "owner@example.org"});
   await google("visitor@example.org", "visitor");
   await expect(op("visitor", "dashboard")).rejects.toThrow();
   await expect(op("visitor", "sites")).rejects.toThrow();
@@ -47,7 +53,7 @@ test("invite, identity link, company access, approval, audit and revocation", as
   expect(
     await call("loginCode", { code: "founder-code", fresh: "founder-stage" }),
   ).toBe(true);
-  expect((await op("founder-stage", "me")).admin).toBe(true);
+  expect((await op("founder-stage", "me")).admin).toBe(false);
   expect(
     await call("loginCode", { code: "invitation", fresh: "temporary" }),
   ).toBe(true);

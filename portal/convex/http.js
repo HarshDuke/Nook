@@ -131,15 +131,16 @@ const handler = httpActionGeneric(async (ctx, req) => {
     if (body.length > 8192)
       return response({ error: "Request too large" }, 413);
     const input = JSON.parse(body);
-    if (op === "code") {
+    if (op === "code" || op === "adminCode") {
       const token = random();
       const value = String(input.code).replace(/[\s-]/g, "").toLowerCase();
       const args = { code: await hash(value), fresh: await hash(token) };
-      const legacy = /^[0-9a-f]{32}$/.test(value);
+      const adminLogin = op === "adminCode";
+      const legacy = !adminLogin && /^[0-9a-f]{32}$/.test(value);
       if (legacy) await ctx.runMutation(ref("redeem"), args);
       else if (
-        value.length !== 12 ||
-        !(await ctx.runMutation(ref("loginCode"), args))
+        value.length !== (adminLogin ? 26 : 12) ||
+        !(await ctx.runMutation(ref("loginCode"), { ...args, adminLogin }))
       )
         return response(
           { error: "Code unavailable. Check the code or try again later." },

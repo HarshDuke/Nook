@@ -103,7 +103,7 @@ export default {async fetch(request,env={}){
  if (path==='/site-files/study.html' || path==='/site-files/models.zip') return serveStudy(request,env,path);
  if (env.SITE_ASSETS && /^\/nook-studies(?:\/[a-zA-Z0-9_-]+(?:\.[a-zA-Z0-9]+)?)*\/?$/.test(url.pathname) && ['GET','HEAD'].includes(request.method)) return env.SITE_ASSETS.fetch(request);
 
- if(['/login','/portal'].includes(path)&&url.origin!==portalOrigin)return Response.redirect(portalOrigin+path+url.search,302);
+ if(['/login','/admin-login','/portal'].includes(path)&&url.origin!==portalOrigin)return Response.redirect(portalOrigin+path+url.search,302);
  if(path.startsWith('/api/portal/')){
    if(url.origin!==portalOrigin)return json({error:'Use the portal domain.'},403);
    const upstream=env.CONVEX_SITE_URL;
@@ -116,7 +116,7 @@ export default {async fetch(request,env={}){
  if(path==='/api/submissions'){if(request.method!=='POST')return json({error:'Method not allowed'},405,{Allow:'POST'});return submitSite(request,env);}
  if(!['GET','HEAD'].includes(request.method))return json({error:'Method not allowed'},405,{Allow:'GET, HEAD'});
  let response;
- if(path==='/portal'||path==='/login')response=html(ASSETS.portal,'Nook | Customer portal');
+ if(path==='/portal'||path==='/login'||path==='/admin-login')response=html(ASSETS.portal,'Nook | Customer portal');
  else if(path==='/portal.js')response=new Response(ASSETS.portalJS,{headers:{...securityHeaders,'Content-Type':'application/javascript'}});
  else if(path==='/portal-photo.jpg')response=new Response(Uint8Array.from(atob(ASSETS.portalPhoto),c=>c.charCodeAt(0)),{headers:{...securityHeaders,'Content-Type':'image/jpeg','Cache-Control':'public, max-age=3600'}});
  else if(path==='/capacity')response=new Response(ASSETS.lab,{headers:{...securityHeaders,'Content-Type':'text/html; charset=utf-8','Cache-Control':'no-store','X-Robots-Tag':'noindex'}});

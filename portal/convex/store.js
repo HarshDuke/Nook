@@ -55,21 +55,21 @@ export const google = mutation({
       throw Error("Use the invited Google account.");
 
     if (!p) {
-      const admin = email === emailKey(process.env.NOOK_ADMIN_EMAIL);
+
       const id = await db.insert("people", {
         email,
         name: a.name,
         subject: a.subject,
-        status: admin ? "approved" : "pending",
-        role: admin ? "admin" : "viewer",
+        status: "pending",
+        role: "viewer",
         epoch: 1,
         logins: 0,
       });
       p = await db.get(id);
-      await log(db, id, admin ? "Admin registered" : "Access requested");
+      await log(db, id, "Access requested");
     } else {
       if (
-        ["declined", "revoked"].includes(p.status) ||
+        p.role === "admin" || ["declined", "revoked"].includes(p.status) ||
         ((alias || p).subject && (alias || p).subject !== a.subject)
       )
         throw Error("Access unavailable");
@@ -88,16 +88,47 @@ async function setCode(db, person, digest) {
   await db.insert("loginCodes", { person, digest });
 }
 
+// Deployment operators provision the shared login with a digest; the raw code stays off the database.
+export const provisionAdministrator = mutation({
+  args: { digest: v.string() },
+  handler: async ({ db }, { digest }) => {
+    if (!/^[0-9a-f]{64}$/.test(digest)) throw Error("Invalid digest");
+    const name = "Nook Administrator";
+    const existing = await db.query("people").filter(q => q.eq(q.field("name"), name)).unique();
+    if (existing) {
+      const credential = await by(db, "loginCodes", "person", existing._id);
+      if (existing.role === "admin" && credential?.digest === digest) return;
+      throw Error("Administrator already exists");
+    }
+    const id = await db.insert("people", { name, role: "admin", status: "approved", logins: 0, epoch: 1 });
+    await setCode(db, id, digest);
+    await log(db, id, "Administrator login provisioned");
+  },
+});
+export const switchFoundersToMembers = mutation({
+  args: {},
+  handler: async ({ db }) => {
+    const people = await db.query("people").collect();
+    if (!people.some(p => p.name === "Nook Administrator" && p.role === "admin" && p.status === "approved" && p.logins > 0))
+      throw Error("Verify dedicated administrator login first");
+    for (const p of people.filter(p => p.role === "admin" &&
+        (p.email === "hvsanghi@gmail.com" || (p.name === "Harsh Dubey" && !p.email && p.company === "Sky Harbour")))) {
+      await db.patch(p._id, { role: "viewer", company: p.company || "Sky Harbour", epoch: p.epoch + 1 });
+      await log(db, p._id, "Changed to regular user");
+    }
+  },
+});
+
 export const loginCode = mutation({
-  args: { code: v.string(), fresh: v.string() },
-  handler: async ({ db }, { code, fresh }) => {
+  args: { code: v.string(), fresh: v.string(), adminLogin: v.optional(v.boolean()) },
+  handler: async ({ db }, { code, fresh, adminLogin }) => {
     const bucket = code.slice(0, 1),
       minute = Math.floor(Date.now() / 60000);
     const attempts = await by(db, "attempts", "bucket", bucket);
     if (attempts?.minute === minute && attempts.count >= 60) return false;
     const credential = await by(db, "loginCodes", "digest", code);
     const person = credential && (await db.get(credential.person));
-    if (!person || person.status !== "approved") {
+    if (!person || person.status !== "approved" || (person.role === "admin") !== Boolean(adminLogin)) {
       const count = attempts?.minute === minute ? attempts.count + 1 : 1;
       if (attempts) await db.patch(attempts._id, { minute, count });
       else await db.insert("attempts", { bucket, minute, count });
@@ -233,7 +264,7 @@ export const portal = mutation({
     if (["addAlias", "removeAlias", "issueCode"].includes(a.op)) {
       if (!target || target.status !== "approved")
         throw Error("Approved account required");
-      if (target.role === "admin" && target._id !== p._id)
+      if (target.role === "admin")
         throw Error("Administrator protected");
       if (a.op === "issueCode") {
         await setCode(db, target._id, i.codeDigest);

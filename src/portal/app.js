@@ -97,6 +97,14 @@ const logout = () =>
 function login() {
   const p = el("section", null, "panel login-panel");
   root.replaceChildren(p);
+  if (location.pathname === "/admin-login") {
+    p.append(el("h1", "Administrator login"));
+    form(p, [["code", "Administrator code", true]], "Log in", async data => {
+      await api("adminCode", data);
+      location.assign("/portal#people-access");
+    });
+    return;
+  }
   const request = new URLSearchParams(location.search).has("request");
   p.append(
     el("h1", request ? "Request access" : "Log in to Nook"),
@@ -117,6 +125,9 @@ function login() {
     await api("code", data);
     location.assign("/portal");
   });
+  const staff = el("a", "Administrator login");
+  staff.href = "/admin-login";
+  p.append(staff);
 }
 function textBlock(p, title, body) {
   p.append(el("h3", title), el("p", body));
@@ -453,7 +464,7 @@ async function admin(p) {
   );
 }
 async function boot() {
-  if (location.pathname === "/login") {
+  if (["/login", "/admin-login"].includes(location.pathname)) {
     login();
     return;
   }
