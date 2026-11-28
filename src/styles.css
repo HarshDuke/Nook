@@ -28,29 +28,14 @@
   padding: max(24px, 6vh) 5vw;
   color: #fffdf3;
   background: linear-gradient(to top, #091809b8, transparent 27%),
-    url('/nook-studies/orchard/orchard.jpg') 54% center / cover;
+    url('/nook-studies/orchard/nook-orchard.jpg') 54% center / cover;
 }
-.orchard-signature h1 {
-  margin: 0;
-  color: inherit;
-  font: bold 34px/.95 Georgia, serif;
-  letter-spacing: -.075em;
-}
-.orchard-signature h1 span {
-  display: inline-block;
-  width: .12em;
-  height: .12em;
-  margin-left: .07em;
-  vertical-align: .22em;
-  background: #c7e699;
-}
-.orchard-signature a {
-  display: inline-block;
-  color: inherit;
-  font: 14px/44px system-ui, sans-serif;
-  text-decoration: underline;
-  text-underline-offset: 4px;
-}
+.orchard-signature h1 { margin: 0; line-height: 0; }
+.orchard-signature h1 img { width: clamp(124px, 12vw, 184px); height: auto; filter: grayscale(1) invert(1) contrast(1.6); mix-blend-mode: screen; }
+.orchard-signature p { margin: 14px 0 5px; color: inherit; font: 14px/1.5 system-ui, sans-serif; }
+.orchard-actions { display: flex; gap: 20px; align-items: center; }
+.orchard-actions a { display: inline-flex; align-items: center; min-height: 44px; color: inherit; font: 14px system-ui, sans-serif; }
+.orchard-actions a:first-child { border-radius: 99px; background: #daf49e; color: #18382c; padding: 0 19px; font-weight: 600; }
 .orchard-signature a:focus-visible { outline: 3px solid #bff77d; }
 
 /* Signed-in workspace */
