@@ -136,6 +136,29 @@ function owners(panel, openAssessment) {
   for (const action of panel.querySelectorAll("[data-assess]")) action.onclick = openAssessment;
 }
 
+function compute(panel) {
+  panel.className = "compute-guide";
+  panel.append(document.querySelector("#compute-guide").content.cloneNode(true));
+}
+
+function peopleWorkspace(panel, activity = false) {
+  const switcher = el("div", null, "people-switcher");
+  const body = el("div");
+  const views = [["Customer activity", customers], ["Manage access", admin]];
+  for (const [label, render] of views) {
+    const tab = button(label, async () => {
+      for (const item of switcher.children) item.removeAttribute("aria-current");
+      tab.setAttribute("aria-current", "page");
+      const section = el("div");
+      body.replaceChildren(section);
+      await render(section);
+    });
+    switcher.append(tab);
+  }
+  panel.append(switcher, body);
+  switcher.children[activity ? 0 : 1].click();
+}
+
 async function assess(p) {
   p.append(el("h1", "Assess Your Site"));
   form(
@@ -216,7 +239,7 @@ async function company(p, name, adminView = false) {
 }
 async function customers(panel) {
   const data = await api("dashboard");
-  panel.append(el("h1", "Customers"));
+  panel.append(el("h1", "Customer activity"));
   const picker = el("select");
   const label = el("label", "Customer or person");
   label.append(picker);
@@ -487,7 +510,8 @@ async function boot() {
     ...(me.admin && me.company !== "Sky Harbour" ? [["Sky Harbour", panel => company(panel, "Sky Harbour", true)]] : []),
     ["For Site Owners", panel => owners(panel, () => { assessmentButton.click(); window.scrollTo(0, 0); })],
     ["Assess Your Site", assess],
-    ...(me.admin ? [["Customers", customers], ["People & Access", admin]] : []),
+    ["Need compute?", compute],
+    ...(me.admin ? [["People & Access", panel => peopleWorkspace(panel, location.hash === "#customers")]] : []),
   ];
   let assessmentButton;
   let requestedButton;
@@ -496,13 +520,15 @@ async function boot() {
     const b = button(label, async () => {
       for (const other of nav.children) other.removeAttribute("aria-current");
       b.setAttribute("aria-current", "page");
-      history.replaceState(null, "", hash);
+      const target = requestedButton === b && initialHash === "#customers" && label === "People & Access" ? "#customers" : hash;
+      history.replaceState(null, "", target);
+      requestedButton = undefined;
       const panel = el("section", null, "panel workspace-page");
       root.replaceChildren(panel);
       await show(panel);
     });
     const hash = "#" + label.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/-$/, "");
-    if (initialHash === hash) requestedButton = b;
+    if (initialHash === hash || (initialHash === "#customers" && label === "People & Access")) requestedButton = b;
     if (show === assess) assessmentButton = b;
     nav.append(b);
   }
